@@ -1,0 +1,98 @@
+!!!!!!!!!!!!!   bash aliases   !!!!!!!!!!!!!
+
+alias apt_update='sudo apt update -y
+&& sudo apt --with-new-pkgs upgrade -y
+&& sudo apt-get update -y
+&& sudo apt-get upgrade -y
+&& sudo apt-get -y dist-upgrade
+&& sudo apt autoremove'
+
+alias docker_rm_all_containers='docker rm $(docker ps -aq)'
+
+alias docker_rm_dangling_images='docker image rm $(docker image ls -f dangling=true -q)'
+
+alias docker_rm_useless='docker_rm_all_containers && docker_rm_dangling_images'
+
+!!!!!!!!!!!!!   sftp   !!!!!!!!!!!!!
+
+sftp -P *port* *sftp-user*@*server*
+
+!!!!!!!!!!!!!   curl   !!!!!!!!!!!!!
+
+Post smth
+curl -X POST
+-H "Content-Type: multipart/related"
+-H "type: text/xml"
+--data "my-data"
+http://my-site/method -vvv
+
+curl
+--user *user*:*pass*
+http://my-site/method
+
+!!!!!!!!!!!!!   curl HDFS   !!!!!!!!!!!!!
+
+HADOOP_USER_NAME=hadoop hdfs dfs -ls hdfs://*server*:*port*
+
+curl http://*server*:*port*/webhdfs/v1/?op=GETCONTENTSUMMARY&user.name=hadoop
+
+создать файл
+curl -i -X PUT "http://*server*:*port*/webhdfs/v1/*file_name*?op=CREATE&user.name=*user*&createparent=true"
+
+загрузить файл
+curl -i -X PUT -T *local_file* "http://*server*:*port*/webhdfs/v1/*file_name*?op=CREATE&user.name=*user*&createparent=true&overwrite=false"
+
+!!!!!!!!!!!!!   influx   !!!!!!!!!!!!!
+
+show databases
+use influx_db
+show measurements
+select * from measurement_1
+insert my-key,result=ok  duration=111
+
+!!!!!!!!!!!!!   redis   !!!!!!!!!!!!!
+
+select redis-db
+ keys *
+get "my-key"
+lrange  my-list 0 -1
+hgetall  my-hash
+
+!!!!!!!!!!!!!   postgres   !!!!!!!!!!!!!
+
+psql -U *user* -W *** -h *server* -p *port* -d *db*
+
+\d+
+
+SELECT * FROM my-table WHERE id=100;
+
+ALTER TABLE "my-table" ADD COLUMN "new_column" boolean NULL;
+
+update "my-table" set "my_param" = replace( "PARAM_VALUE", 'first_value', 'second_value');
+
+!!!!!!!!!!!!!   clickhouse   !!!!!!!!!!!!!
+
+echo "show tables" | curl  'http://*clickhouse_server*:*port*?user=*use*&password=*pass*&database=*db*' --data-binary @- -v
+
+curl --user *user*:*pass* -d 'select count(*) from my-table' *clickhouse_server*:*port*
+
+echo "CREATE TABLE ..." | \
+curl  'http://*clickhouse_server*:8123?user=*user*&password=*password*&database=*db*' \
+--data-binary @-
+
+curl \
+--user *user*:*pass* \
+-d 'select * from my-table limit 50' \
+http://*clickhouse_server*:*port*
+
+echo "select * from my-table limit 50" | \
+curl 'http://*clickhouse_server*:*port*/?user=*use*&password=*pass*&database=*db*' -d @-
+
+
+!!!!!!!!!!!!!   webdav   !!!!!!!!!!!!!
+
+cadaver http://*server*:*port*/tmp
+
+!!!!!!!!!!!!!   kafka   !!!!!!!!!!!!!
+
+kcat -b *server* -L

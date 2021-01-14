@@ -1,0 +1,148 @@
+default:
+  image: gitlab/image
+
+workflow:
+   rules:
+     # пропускать merge_request_pipelines (https://docs.gitlab.com/ee/ci/pipelines/merge_request_pipelines.html)
+     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+       when: never
+     # во всех остальных случаях запускать
+     - when: always
+
+stages:
+  - build
+  - test
+  - deploy
+
+.condition_staging:
+  rules:
+    # запускать для ветки по умолчанию
+    - if: $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: on_success
+    # во всех остальных случаях запускать только вручную
+    - when: manual
+
+.condition_production:
+  rules:
+    # запускать для тэгов
+    - if: $CI_COMMIT_TAG != null
+      when: on_success
+    # для мастера запускать только вручную
+    - if: $CI_COMMIT_REF_NAME == "master"
+      when: manual
+    - if: $CI_COMMIT_REF_NAME =~ /^release-/
+      when: manual
+    - when: never
+
+.prepare_deploy_tool:
+  environment:
+    name: $STAGE_NAME
+  variables:
+    APP_ENV: $STAGE_NAME
+    MIX_ENV: $STAGE_NAME
+    RAILS_ENV: $STAGE_NAME
+  before_script:
+    - |
+      if ! command -v project_to_run_script > /dev/null
+      then
+        curl https://github.com/project_to_run_script -sLo /usr/bin/project_to_run_script
+        chmod +x /usr/bin/project_to_run_script
+      fi
+
+      DEPLOY_VERSION=`cat VERSION`-r`git rev-parse --short HEAD | xargs echo -n`
+
+      curl http://gitlab/common/deploy_tool/-/raw/master/deploy_tool.sh?ref_type=heads -so /tmp/deploy_tool.sh
+      chmod +x /tmp/deploy_tool.sh
+  cache:
+    - key:
+        prefix: $CI_PROJECT_PATH_SLUG-deploy-java
+        files:
+          - build.gradle
+          - settings.gradle
+      paths:
+        - .gradle/wrapper
+        - .gradle/caches
+
+.deploy_staging:
+  stage: deploy
+  extends:
+    - .condition_staging
+    - .prepare_deploy_tool
+  before_script:
+    - !reference [.prepare_deploy_tool, before_script]
+  resource_group: $STAGE_NAME
+  script:
+    - /tmp/deploy_tool.sh deploy $STAGE_NAME $DEPLOY_VERSION
+
+default:
+  image: gitlab/image
+  cache:
+    paths:
+      - .gradle/wrapper
+      - .gradle/caches
+
+check:
+  stage: test
+  script:
+    - JAVA_HOME=$(asdf where java)
+    - ./gradlew --no-daemon check
+release:
+  image: gitlab/image
+  stage: release
+  only:
+    - tags
+  cache: {}
+  script:
+    - VERSION=$(cat VERSION)
+    - release-cli create --tag-name $VERSION
+
+добавить kaniko image в git
+.kaniko:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - if [ -z "$DOCKERFILE" ] || [ -z "$IMAGE_NAME" ]; then exit 1; fi
+    - |
+      cat <<EOF > /kaniko/.docker/config.json
+      {
+        "auths": {
+          "$CI_REGISTRY": {
+            "username": "$CI_REGISTRY_USER",
+            "password": "$CI_REGISTRY_PASSWORD"
+          }
+        }
+      }
+      EOF
+    - /kaniko/executor
+      --context dir://$CI_PROJECT_DIR
+      --dockerfile $DOCKERFILE
+      --insecure
+      --insecure-pull
+      --single-snapshot
+      --destination $CI_REGISTRY_IMAGE/$IMAGE_NAME:latest
+
+
+добавить юзера на сервере через CI
+set_up_ssh_on_ci() {
+    if [ -n "$CI" ] && [ -z "$SSH_IS_SET_UP" ]
+    then
+        local stage
+        stage=$(stage_in_all_caps)
+
+        local user=${stage}_DEPLOY_USER
+        local  key=${stage}_DEPLOY_KEY
+
+        fail_if_empty $user
+        fail_if_empty $key
+
+        mkdir -p ~/.ssh
+        eval "$(ssh-agent)"
+        echo "User ${!user}" > ~/.ssh/config
+        echo ${!key} | base64 --decode | ssh-add -
+        ssh-keyscan $SERVERS > ~/.ssh/known_hosts
+
+        SSH_IS_SET_UP=1
+    fi
+}
