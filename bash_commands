@@ -70,6 +70,8 @@ ALTER TABLE "my-table" ADD COLUMN "new_column" boolean NULL;
 
 update "my-table" set "my_param" = replace( "PARAM_VALUE", 'first_value', 'second_value');
 
+docker exec pstgrs pg_dumpall -U "user" > /path/to/text/file/dump.sql
+
 !!!!!!!!!!!!!   clickhouse   !!!!!!!!!!!!!
 
 echo "show tables" | curl  'http://*clickhouse_server*:*port*?user=*use*&password=*pass*&database=*db*' --data-binary @- -v
@@ -96,3 +98,8 @@ cadaver http://*server*:*port*/tmp
 !!!!!!!!!!!!!   kafka   !!!!!!!!!!!!!
 
 kcat -b *server* -L
+
+!!!!!!!!!!!!!   sql   !!!!!!!!!!!!!
+
+Создать таблицу с одним столбцом из списка
+SELECT unnest(array[:idList]) as id
